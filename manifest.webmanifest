@@ -1,0 +1,16 @@
+{
+  "name": "Nabuzy",
+  "short_name": "Nabuzy",
+  "description": "Nabil's own day planner: the timetable, climbing sessions, assignments, exams and quizzes, and the five prayers.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#faf9f6",
+  "theme_color": "#faf9f6",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
