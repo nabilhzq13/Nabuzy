@@ -1,9 +1,9 @@
 # Nabuzy
 
-Nabil's own day planner. It has his timetable, his climbing sessions,
-assignments, exams and quizzes, and the five daily prayers. Everything syncs to
-his Supabase project and comes back on any phone he signs in on. Reminders come
-from there too.
+Nabil's own day planner: the timetable, climbing sessions, assignments, exams
+and quizzes, and the five daily prayers. Everything syncs to Nabil's Supabase
+project and comes back on any phone that signs in. Reminders come from there
+too.
 
 It's [Dayline](https://github.com/nabilhzq13/Dayline) made personal, with
 Break's climbing log brought in. Unlike Dayline, it isn't for anyone else: the
@@ -57,6 +57,12 @@ climbing sessions and photos, and leaves everything else here as it is.
 The `remind` Edge Function sends them. The pg_cron job `dayline-reminders` calls
 it every minute. The key pair it signs with is in the table `push_vapid`, which
 only the function can read. The public half is also in `index.html`.
+
+Due dates, exams and quizzes get theirs 1 day and 1 hour before, until you
+choose otherwise: in **Settings**, **Reminders**, under **Due dates, exams and
+quizzes**, tap any mix of 1 week, 3 days, 1 day and 1 hour before. One that
+would land in quiet hours comes the minute they end, if that's still before
+it's due.
 
 ## Files
 

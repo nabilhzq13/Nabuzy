@@ -40,12 +40,19 @@ function localMinute(s: unknown): number | null {
 // ---------- choices ----------
 // The synced "reminders" doc. Leads are minutes ahead; quiet hours run from
 // qfrom to qto in minutes of the day, across midnight when qfrom > qto. subuh
-// lets Subuh through quiet hours.
+// lets Subuh through quiet hours. dlead: how long before a due date, exam or
+// quiz its reminders come, any of a week, three days, a day and an hour.
 type Prefs = {
-  blocks: boolean; due: boolean; pray: boolean; late: boolean;
+  blocks: boolean; due: boolean; pray: boolean; late: boolean; dlead: number[];
   plead: number; blead: number; qfrom: number; qto: number; subuh: boolean; tz: number;
 };
-const DEFAULTS: Prefs = { blocks: true, due: true, pray: true, late: true, plead: 0, blead: 10, qfrom: 0, qto: 420, subuh: false, tz: 480 };
+const DEFAULTS: Prefs = { blocks: true, due: true, pray: true, late: true, dlead: [1440, 60], plead: 0, blead: 10, qfrom: 0, qto: 420, subuh: false, tz: 480 };
+// Each lead's name in a reminder's key, and how it reads. A day and an hour
+// keep the keys they had before there was a choice, so nothing goes twice.
+const LEADS: Record<number, { key: string; when: string }> = {
+  10080: { key: "week", when: "in a week" }, 4320: { key: "3d", when: "in 3 days" },
+  1440: { key: "day", when: "tomorrow" }, 60: { key: "hour", when: "in an hour" },
+};
 function prefsOf(v: unknown): Prefs {
   const o = (v && typeof v === "object" ? v : {}) as Record<string, unknown>, p = { ...DEFAULTS };
   for (const k of ["blocks", "due", "pray", "late", "subuh"] as const) if (typeof o[k] === "boolean") p[k] = o[k] as boolean;
@@ -58,6 +65,10 @@ function prefsOf(v: unknown): Prefs {
     if (Number.isInteger(n) && (n as number) >= 0 && (n as number) < 1440) p[k] = n as number;
   }
   if (Number.isInteger(o.tz) && Math.abs(o.tz as number) <= 840) p.tz = o.tz as number;
+  if (Array.isArray(o.dlead)) {
+    const l = Object.keys(LEADS).map(Number).filter((n) => (o.dlead as unknown[]).indexOf(n) >= 0);
+    if (l.length) p.dlead = l;
+  }
   return p;
 }
 function quiet(p: Prefs, m: number): boolean {
@@ -72,6 +83,21 @@ function placed(p: Prefs, at: number, anchor: number, pass: boolean): number | n
   let end = Math.floor(at / 1440) * 1440 + p.qto;
   if (end <= at) end += 1440;
   return end <= anchor ? end : null;
+}
+// A due-date reminder that lands in quiet hours comes the minute they end,
+// as long as that's still before the thing is due.
+function early(p: Prefs, at: number, due: number): number | null {
+  if (!quiet(p, at)) return at;
+  let end = Math.floor(at / 1440) * 1440 + p.qto;
+  if (end <= at) end += 1440;
+  return end < due ? end : null;
+}
+const WD = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const MO = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+// "Fri 7 Nov", for a minute in the account's own time.
+function dayText(m: number): string {
+  const d = new Date(Math.floor(m / 1440) * 86400000);
+  return `${WD[d.getUTCDay()]} ${d.getUTCDate()} ${MO[d.getUTCMonth()]}`;
 }
 
 // ---------- JAKIM's timetable ----------
@@ -173,23 +199,24 @@ function due(now: number, a: Account, span = 3): Note[] {
       }
     }
   }
-  // Deadlines, exams and quizzes: a day before, and an hour before, unless
-  // it's ticked off. An assignment is due; an exam or a quiz starts.
+  // Deadlines, exams and quizzes: as long before as you chose, unless it's
+  // ticked off. An assignment is due; an exam or a quiz starts.
   if (p.due) for (const t of a.tasks) {
     const at = localMinute(t.due);
     if (at === null || t.done) continue;
     const test = t.kind === "exam" || t.kind === "quiz", kind = t.kind === "exam" ? "Exam" : "Quiz";
     const what = String(t.title || (test ? kind : "Assignment")).slice(0, 80), course = t.course ? String(t.course).slice(0, 30) + " · " : "";
-    take({
-      key: `d:${t.id}:${t.due}:day`, tab: "due", topic: "due",
-      title: test ? `${kind} tomorrow: ${what}` : `${what} is due tomorrow`,
-      body: test ? `${course}Starts at ${fmt(at)}.` : `${course}Due at ${fmt(at)}. Still to hand in.`,
-    }, placed(p, at - 1440, at, false), at);
-    take({
-      key: `d:${t.id}:${t.due}:hour`, tab: "due", topic: "due",
-      title: test ? `${kind} in an hour: ${what}` : `${what} is due in an hour`,
-      body: test ? `${course}Starts at ${fmt(at)}.` : `${course}Due at ${fmt(at)}.`,
-    }, placed(p, at - 60, at, false), at);
+    for (const lead of p.dlead) {
+      const l = LEADS[lead];
+      if (!l) continue;
+      // A week or three days out, the reminder says which day.
+      const on = lead >= 4320 ? `${dayText(at)}, ${fmt(at)}` : fmt(at);
+      take({
+        key: `d:${t.id}:${t.due}:${l.key}`, tab: "due", topic: "due",
+        title: test ? `${kind} ${l.when}: ${what}` : `${what} is due ${l.when}`,
+        body: test ? `${course}Starts ${lead >= 4320 ? "" : "at "}${on}.` : `${course}Due ${lead >= 4320 ? "" : "at "}${on}.${lead >= 1440 ? " Still to hand in." : ""}`,
+      }, early(p, at - lead, at), at);
+    }
   }
   return out;
 }

@@ -669,6 +669,8 @@
   .rem-pick{margin-top:var(--s2)}
   .rem-sub{margin-top:var(--s3)}
   #rem-opts{margin-bottom:var(--s3)}
+  .rem-dlead{padding:2px 0 var(--s3)}
+  .rem-dlead .label{margin-bottom:6px}
   /* Qadha from before tracking: a count per prayer, chipped away one at a time. */
   .qtext{padding:6px 0;min-width:0}
   .qrow .tag{white-space:nowrap;font-weight:var(--w-semibold)}
@@ -1405,7 +1407,16 @@
       <p class="note" id="rem-note" style="margin:0 0 var(--s3)">Blocks, due dates, exams and prayer times on your lock screen, even while Nabuzy is closed. Your Supabase sends them and is set up for them already, so it's one tap.</p>
       <div id="rem-opts" class="hide">
         <label class="sw-row"><span>Block starts<small>Not for a block you've already ticked</small></span><input type="checkbox" class="sw" role="switch" id="rem-blocks"></label>
-        <label class="sw-row"><span>Due dates, exams and quizzes<small>A day before, and an hour before, unless it's ticked off</small></span><input type="checkbox" class="sw" role="switch" id="rem-due"></label>
+        <label class="sw-row"><span>Due dates, exams and quizzes<small id="rem-due-sub">1 day and 1 hour before, unless it's ticked off</small></span><input type="checkbox" class="sw" role="switch" id="rem-due"></label>
+        <div class="rem-dlead" id="rem-dlead">
+          <p class="label" id="rem-dlead-l">They come</p>
+          <div class="fchips" role="group" aria-labelledby="rem-dlead-l">
+            <button type="button" data-lead="10080" aria-pressed="false">1 week before</button>
+            <button type="button" data-lead="4320" aria-pressed="false">3 days before</button>
+            <button type="button" data-lead="1440" aria-pressed="true">1 day before</button>
+            <button type="button" data-lead="60" aria-pressed="true">1 hour before</button>
+          </div>
+        </div>
         <label class="sw-row rem-solat"><span>Prayer times<small>When each prayer's time starts, from JAKIM</small></span><input type="checkbox" class="sw" role="switch" id="rem-pray"></label>
         <label class="sw-row rem-solat"><span>Before a prayer runs out<small>30 minutes before its time ends, if it isn't ticked</small></span><input type="checkbox" class="sw" role="switch" id="rem-late"></label>
         <div class="two rem-pick">
@@ -3793,14 +3804,21 @@ el("app-clear").addEventListener("click",function(){
 // tz: this phone's time zone, minutes east of UTC, so your project knows when
 // your 9am is. VAPID: the public half of your project's key.
 var VAPID="BPdHUoQR2dqlgSWKk7yakAI1rdBVzujIheL7REwbYqaJDXcQK4WST3bTPqDLKtG5tKDypoVHRFKflKUpGeLX3bA";
-var RDEF={blocks:true,due:true,pray:true,late:true,plead:0,blead:10,qfrom:0,qto:420,subuh:false,vapid:VAPID,tz:480};
+// dlead: how long before a due date, exam or quiz its reminders come, in
+// minutes: any of a week, three days, a day and an hour.
+var RDEF={blocks:true,due:true,dlead:[1440,60],pray:true,late:true,plead:0,blead:10,qfrom:0,qto:420,subuh:false,vapid:VAPID,tz:480};
+var DLEADS=[[10080,"1 week"],[4320,"3 days"],[1440,"1 day"],[60,"1 hour"]];
+// Only the leads on offer, longest first; none left means the usual two.
+function leadsOf(v){var l=Array.isArray(v)?DLEADS.map(function(x){return x[0];}).filter(function(n){return v.indexOf(n)>=0;}):[];
+  return l.length?l:RDEF.dlead.slice();}
 function tzNow(){return -new Date().getTimezoneOffset();}
 // rprefs: the synced choices, null until first set. rpush: this phone's
 // sign-up, {ep: its push address, at: when Supabase last took it, ok: when a
 // reminder last got through, err: why the last one didn't}.
 var rprefs=load(K.remind,null),rpush=load(K.push,null),rbusy=false;
 // The key is always this app's own, whatever an older copy of the choices says.
-function rp(){var o={};Object.keys(RDEF).forEach(function(k){o[k]=rprefs&&typeof rprefs[k]===typeof RDEF[k]?rprefs[k]:RDEF[k];});o.vapid=VAPID;return o;}
+function rp(){var o={};Object.keys(RDEF).forEach(function(k){o[k]=rprefs&&typeof rprefs[k]===typeof RDEF[k]?rprefs[k]:RDEF[k];});
+  o.vapid=VAPID;o.dlead=leadsOf(rprefs&&rprefs.dlead);return o;}
 function homeApp(){return navigator.standalone===true||!!(window.matchMedia&&matchMedia("(display-mode: standalone)").matches);}
 function canPush(){return "serviceWorker" in navigator&&"PushManager" in window&&"Notification" in window;}
 function remMsg(t){syncMsg("rem-err",t);}
@@ -3828,6 +3846,12 @@ function renderRemind(){
   el("rem-on").disabled=rbusy||!canPush()||perm==="denied";
   el("rem-test").disabled=rbusy||!sm.s;el("rem-off").disabled=rbusy;
   ["blocks","due","pray","late","subuh"].forEach(function(k){el("rem-"+k).checked=p[k];});
+  // When due-date reminders come: said under the switch, and picked below it.
+  var lw=DLEADS.filter(function(x){return p.dlead.indexOf(x[0])>=0;}).map(function(x){return x[1];});
+  el("rem-due-sub").textContent=listText(lw)+" before, unless it's ticked off";
+  el("rem-dlead").classList.toggle("hide",!p.due);
+  Array.prototype.forEach.call(el("rem-dlead").querySelectorAll("button"),function(b){
+    b.setAttribute("aria-pressed",p.dlead.indexOf(+b.getAttribute("data-lead"))>=0?"true":"false");});
   Array.prototype.forEach.call(document.querySelectorAll(".rem-solat"),function(n){n.classList.toggle("hide",!pref("solat",false));});
   el("rem-plead").value=String(p.plead);el("rem-blead").value=String(p.blead);
   el("rem-qfrom").value=hhmm(p.qfrom);el("rem-qto").value=hhmm(p.qto);
@@ -3880,6 +3904,13 @@ el("rem-off").addEventListener("click",function(){
 });
 function setPref(k,v){rprefs=rp();rprefs[k]=v;save(K.remind,rprefs);}
 ["blocks","due","pray","late","subuh"].forEach(function(k){el("rem-"+k).addEventListener("change",function(){setPref(k,this.checked);});});
+el("rem-due").addEventListener("change",renderRemind);
+// Any mix of the four, but always at least one: with none, turn the switch off.
+Array.prototype.forEach.call(el("rem-dlead").querySelectorAll("button"),function(b){b.addEventListener("click",function(){
+  var n=+b.getAttribute("data-lead"),l=rp().dlead,at=l.indexOf(n);
+  if(at>=0&&l.length===1){toast("Keep at least one, or turn due dates off");return;}
+  if(at>=0)l.splice(at,1);else l.push(n);
+  setPref("dlead",leadsOf(l));renderRemind();});});
 ["plead","blead"].forEach(function(k){el("rem-"+k).addEventListener("change",function(){setPref(k,+this.value);});});
 ["qfrom","qto"].forEach(function(k){el("rem-"+k).addEventListener("change",function(){
   if(/^\d\d:\d\d/.test(this.value))setPref(k,toMin(this.value));else renderRemind();});});
