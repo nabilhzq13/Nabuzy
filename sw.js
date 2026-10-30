@@ -1,6 +1,6 @@
 /* Nabuzy — offline cache, and the reminders your own Supabase pushes.
    Bump CACHE when you change any file, so phones pick the new version up. */
-var CACHE = "nabuzy-v1";
+var CACHE = "nabuzy-v2";
 var FILES = [
   "./",
   "./index.html",
